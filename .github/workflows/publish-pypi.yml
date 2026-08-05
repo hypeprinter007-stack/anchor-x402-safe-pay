@@ -4,11 +4,10 @@ name: Publish to PyPI
 # "anchor-x402-safe-pay" pointing at this repo + workflow (publish-pypi.yml),
 # environment "pypi". No API token needed after that.
 
-# Manual until the PyPI Trusted Publisher is configured (see note above).
-# Once it is, switch this back to `push: { tags: ["v*"] }` so a version tag
-# publishes npm + PyPI together.
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
 
 jobs:
   publish:
