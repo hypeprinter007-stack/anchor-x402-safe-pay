@@ -1,0 +1,23 @@
+[project]
+name = "anchor-x402-safe-pay"
+version = "0.1.0"
+description = "Screen a recipient before an agent sends funds — anchor-x402 risk pre-flight (allow/review/block) as a one-line, wallet-agnostic wrapper around any send."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = ["x402", "agent", "aml", "sanctions", "risk", "screening", "base", "solana", "usdc", "wallet", "drainer", "guard"]
+dependencies = []
+
+[project.urls]
+Homepage = "https://anchor-x402.com"
+Repository = "https://github.com/hypeprinter007-stack/anchor-x402-safe-pay"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["anchor_safe_pay.py"]
+
+[tool.hatch.build.targets.wheel.sources]
+"anchor_safe_pay.py" = "anchor_safe_pay.py"
