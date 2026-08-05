@@ -52,37 +52,44 @@ export async function screen(address, opts = {}) {
 }
 
 /**
- * Screen `recipient`, then run `send()` only if the verdict permits.
+ * Screen `recipient` and return a decision — no throw, no send. The building
+ * block for registering on a client's existing pre-pay hook (`beforePayment
+ * Creation`, `onBeforePayment`, `payerChooser`, …): call it with the x402
+ * `payTo` and map `.ok` to whatever the hook expects (a boolean, an `{abort}`,
+ * or a throw). See the examples/ directory.
  *
- * @param {string} recipient  EVM 0x… or Solana base58 address you're about to pay.
- * @param {() => any} send     Your actual send (sync or async). Runs only when allowed.
  * @param {object} [opts]
- *   blockOn  {string[]}  recommendations that refuse the send. Default ["block","review"]
- *                        (fail-closed: a `review` verdict needs a human, so it holds by default).
- *   onError  {"block"|"allow"}  what to do if the screen call itself fails (network / 402 /
- *                        anchor down). Default "block" — a safety guard fails safe. Set "allow"
- *                        if you'd rather anchor downtime never blocks your payments.
+ *   blockOn  {string[]}  recommendations that mean "don't pay". Default ["block","review"].
+ *   onError  {"block"|"allow"}  decision if the screen call itself fails. Default "block".
  *   plus any `screen` opts (fetchImpl, endpoint, timeoutMs).
+ * @returns {Promise<{ok: boolean, verdict: object}>} ok=true ⇒ safe to pay.
+ */
+export async function screenAllows(recipient, opts = {}) {
+  const { blockOn = ["block", "review"], onError = "block", ...screenOpts } = opts;
+  try {
+    const verdict = await screen(recipient, screenOpts);
+    return { ok: !blockOn.includes(verdict.recommendation), verdict };
+  } catch (err) {
+    return {
+      ok: onError === "allow",
+      verdict: {
+        wallet: recipient,
+        recommendation: "error",
+        risk_score: null,
+        notes: `screen failed: ${err && err.message ? err.message : String(err)}`,
+      },
+    };
+  }
+}
+
+/**
+ * Screen `recipient`, then run `send()` only if the verdict permits. The
+ * wrap-your-own-send model; for registering on a client's existing hook, use
+ * `screenAllows` instead. Same options as `screenAllows`.
  * @returns whatever `send()` returns. Throws ScreenBlockedError otherwise.
  */
 export async function guardedSend(recipient, send, opts = {}) {
-  const { blockOn = ["block", "review"], onError = "block", ...screenOpts } = opts;
-  let verdict;
-  try {
-    verdict = await screen(recipient, screenOpts);
-  } catch (err) {
-    if (onError === "allow") return await send();
-    const blocked = new ScreenBlockedError({
-      wallet: recipient,
-      recommendation: "error",
-      risk_score: null,
-      notes: `screen failed: ${err && err.message ? err.message : String(err)}`,
-    });
-    blocked.cause = err;
-    throw blocked;
-  }
-  if (blockOn.includes(verdict.recommendation)) {
-    throw new ScreenBlockedError(verdict);
-  }
+  const { ok, verdict } = await screenAllows(recipient, opts);
+  if (!ok) throw new ScreenBlockedError(verdict);
   return await send();
 }

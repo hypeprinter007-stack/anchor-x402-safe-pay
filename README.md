@@ -43,6 +43,25 @@ guarded_send(
 )
 ```
 
+## Register on your client's existing pre-pay hook
+
+Most x402 clients already expose a hook that fires with the recipient (`payTo`) **before** signing — you don't need the wrapper, just a decision. `screenAllows()` is that decision (never throws; folds `blockOn`/`onError` so the hook stays a one-liner). Full snippets in [`examples/`](./examples):
+
+**Official `@x402` client** (`beforePaymentCreation`):
+```js
+x402Client.onBeforePaymentCreation(async (req) => {
+  const { ok, verdict } = await screenAllows(req.payTo, { fetchImpl: paidFetch });
+  return ok ? undefined : { abort: true, reason: verdict.recommendation };
+});
+```
+
+**elizaOS plugin-wallet** (`onBeforePayment` → return `false` to block):
+```js
+const onBeforePayment = async (req) => (await screenAllows(req.payTo, { fetchImpl: paidFetch })).ok;
+```
+
+**faremeter** (`payerChooser` → throw to abort), **qntx/r402** (`before_payment_creation`), and the **Python** client (`on_before_payment_creation`) take the same shape — see [`examples/`](./examples). Use `paidFetch` *other* than the client you're guarding, so screening a payment never recurses.
+
 ## Verdict → action
 
 `/v1/screen` returns a `recommendation` you branch on:

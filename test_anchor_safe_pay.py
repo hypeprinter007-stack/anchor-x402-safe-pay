@@ -1,7 +1,7 @@
 """Offline tests: python3 test_anchor_safe_pay.py"""
 import sys
 
-from anchor_safe_pay import ScreenBlocked, guarded_send, screen
+from anchor_safe_pay import ScreenBlocked, guarded_send, screen, screen_allows
 
 RECIPIENT = "0x1111111111111111111111111111111111111111"
 _fails = 0
@@ -77,6 +77,16 @@ ok("screen error + on_error='allow' → send runs", state["sent"] and r == "tx-h
 # screen() surfaces the raw verdict
 v = screen(RECIPIENT, fetch=fetch_returning({"recommendation": "allow", "risk_score": 3, "wallet": RECIPIENT}))
 ok("screen() returns the raw verdict", v["recommendation"] == "allow" and v["risk_score"] == 3)
+
+# screen_allows: decision primitive for hook wiring (no raise)
+allow_ok, _ = screen_allows(RECIPIENT, fetch=fetch_returning({"recommendation": "allow", "wallet": RECIPIENT}))
+ok("screen_allows: allow -> (True, ...)", allow_ok is True)
+block_ok, block_v = screen_allows(RECIPIENT, fetch=fetch_returning({"recommendation": "block", "wallet": RECIPIENT}))
+ok("screen_allows: block -> (False, verdict)", block_ok is False and block_v["recommendation"] == "block")
+err_ok, err_v = screen_allows(RECIPIENT, fetch=fetch_failing())
+ok("screen_allows: screen error default -> (False, error verdict)", err_ok is False and err_v["recommendation"] == "error")
+err2_ok, _ = screen_allows(RECIPIENT, on_error="allow", fetch=fetch_failing())
+ok("screen_allows: screen error + on_error='allow' -> (True, ...)", err2_ok is True)
 
 print(f"\n{_fails} FAILED" if _fails else "\nall safe-pay (python) checks OK")
 sys.exit(1 if _fails else 0)

@@ -54,6 +54,32 @@ def screen(
         return json.loads(resp.read())
 
 
+def screen_allows(
+    recipient: str,
+    *,
+    block_on: tuple[str, ...] = ("block", "review"),
+    on_error: str = "block",
+    **screen_kwargs: Any,
+) -> tuple[bool, dict]:
+    """Screen `recipient` and return a decision — no raise, no send. The building
+    block for registering on a client's existing pre-pay hook (e.g.
+    `on_before_payment_creation`): call with the x402 `pay_to` and map the bool.
+
+    block_on : recommendations that mean "don't pay". Default ("block", "review").
+    on_error : "block" (default) or "allow" — decision if the screen call fails.
+    Returns (ok, verdict); ok=True ⇒ safe to pay.
+    """
+    try:
+        verdict = screen(recipient, **screen_kwargs)
+        return (verdict.get("recommendation") not in block_on, verdict)
+    except Exception as err:  # noqa: BLE001 — any screen failure is a policy decision
+        return (
+            on_error == "allow",
+            {"wallet": recipient, "recommendation": "error", "risk_score": None,
+             "notes": f"screen failed: {err}"},
+        )
+
+
 def guarded_send(
     recipient: str,
     send: Callable[[], Any],
@@ -62,28 +88,11 @@ def guarded_send(
     on_error: str = "block",
     **screen_kwargs: Any,
 ) -> Any:
-    """Screen `recipient`, then run `send()` only if the verdict permits.
-
-    block_on : recommendations that refuse the send. Default ("block", "review")
-               — fail-closed: a `review` verdict needs a human, so it holds.
-    on_error : "block" (default) or "allow" — what to do if the screen call
-               itself fails (network / 402 / anchor down). A safety guard fails
-               safe; set "allow" if anchor downtime should never block payments.
-    Returns whatever `send()` returns; raises ScreenBlocked otherwise.
+    """Screen `recipient`, then run `send()` only if the verdict permits. The
+    wrap-your-own-send model; to register on a client's existing hook, use
+    `screen_allows` instead. Returns `send()`'s result; raises ScreenBlocked otherwise.
     """
-    try:
-        verdict = screen(recipient, **screen_kwargs)
-    except Exception as err:  # noqa: BLE001 — any screen failure is a policy decision
-        if on_error == "allow":
-            return send()
-        raise ScreenBlocked(
-            {
-                "wallet": recipient,
-                "recommendation": "error",
-                "risk_score": None,
-                "notes": f"screen failed: {err}",
-            }
-        ) from err
-    if verdict.get("recommendation") in block_on:
+    ok, verdict = screen_allows(recipient, block_on=block_on, on_error=on_error, **screen_kwargs)
+    if not ok:
         raise ScreenBlocked(verdict)
     return send()

@@ -1,6 +1,6 @@
 // Offline tests: node index.test.mjs
 import assert from "node:assert";
-import { guardedSend, screen, ScreenBlockedError } from "./index.js";
+import { guardedSend, screen, screenAllows, ScreenBlockedError } from "./index.js";
 
 let fails = 0;
 const ok = (name, fn) =>
@@ -75,6 +75,28 @@ const run = async () => {
     const v = await screen(RECIPIENT, { fetchImpl: fetchReturning({ recommendation: "allow", risk_score: 3, wallet: RECIPIENT }) });
     assert.equal(v.recommendation, "allow");
     assert.equal(v.risk_score, 3);
+  });
+
+  await ok("screenAllows: allow → {ok:true}", async () => {
+    const r = await screenAllows(RECIPIENT, { fetchImpl: fetchReturning({ recommendation: "allow", risk_score: 0, wallet: RECIPIENT }) });
+    assert.equal(r.ok, true);
+  });
+
+  await ok("screenAllows: block → {ok:false} + verdict (for hook wiring)", async () => {
+    const r = await screenAllows(RECIPIENT, { fetchImpl: fetchReturning({ recommendation: "block", risk_score: 100, wallet: RECIPIENT }) });
+    assert.equal(r.ok, false);
+    assert.equal(r.verdict.recommendation, "block");
+  });
+
+  await ok("screenAllows: screen error + onError:'allow' → {ok:true}", async () => {
+    const r = await screenAllows(RECIPIENT, { onError: "allow", fetchImpl: fetchFailing() });
+    assert.equal(r.ok, true);
+  });
+
+  await ok("screenAllows: screen error default → {ok:false, verdict.error}", async () => {
+    const r = await screenAllows(RECIPIENT, { fetchImpl: fetchFailing() });
+    assert.equal(r.ok, false);
+    assert.equal(r.verdict.recommendation, "error");
   });
 
   console.log(fails ? `\n${fails} FAILED` : "\nall safe-pay (js) checks OK");
