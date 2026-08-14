@@ -14,6 +14,7 @@ import urllib.request
 from typing import Any, Callable
 
 DEFAULT_ENDPOINT = "https://api.anchor-x402.com/v1/screen"
+VALID_RECOMMENDATIONS = frozenset({"allow", "review", "block"})
 
 
 class ScreenBlocked(Exception):
@@ -71,6 +72,20 @@ def screen_allows(
     """
     try:
         verdict = screen(recipient, **screen_kwargs)
+        if not isinstance(verdict, dict):
+            raise ValueError("invalid screen response: expected a dictionary")
+        recommendation = verdict.get("recommendation")
+        if not isinstance(recommendation, str) or recommendation not in VALID_RECOMMENDATIONS:
+            if "recommendation" not in verdict:
+                detail = "missing recommendation"
+            elif isinstance(recommendation, str):
+                detail = f"unknown recommendation {recommendation[:64]!r}"
+            else:
+                detail = (
+                    "recommendation must be a string "
+                    f"(received {type(recommendation).__name__})"
+                )
+            raise ValueError(f"invalid screen response: {detail}")
         return (verdict.get("recommendation") not in block_on, verdict)
     except Exception as err:  # noqa: BLE001 — any screen failure is a policy decision
         return (

@@ -72,6 +72,8 @@ const onBeforePayment = async (req) => (await screenAllows(req.payTo, { fetchImp
 | `review` | needs a human (elevated risk) | **held** (fail-closed) |
 | `block` | sanctioned / drainer / phishing | **held** |
 
+Only `allow`, `review`, and `block` are accepted as valid screening recommendations. Unknown or malformed recommendations are handled through `onError` / `on_error` and therefore block by default.
+
 By default `blockOn: ["block", "review"]` — a `review` holds. To send on `review` (e.g. you have your own human-in-the-loop), set `blockOn: ["block"]` and inspect the thrown verdict:
 
 ```js
