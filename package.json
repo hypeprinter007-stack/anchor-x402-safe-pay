@@ -1,6 +1,6 @@
 {
   "name": "anchor-x402-safe-pay",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Screen a recipient before an agent sends funds — anchor-x402 risk pre-flight (allow/review/block) as a one-line, wallet-agnostic wrapper around any send.",
   "type": "module",
   "main": "index.js",
