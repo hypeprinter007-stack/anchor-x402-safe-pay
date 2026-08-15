@@ -8,6 +8,7 @@
 // works with viem, ethers, x402-fetch, a Solana signer — anything.
 
 const DEFAULT_ENDPOINT = "https://api.anchor-x402.com/v1/screen";
+const VALID_RECOMMENDATIONS = new Set(["allow", "review", "block"]);
 
 export class ScreenBlockedError extends Error {
   constructor(verdict) {
@@ -68,6 +69,19 @@ export async function screenAllows(recipient, opts = {}) {
   const { blockOn = ["block", "review"], onError = "block", ...screenOpts } = opts;
   try {
     const verdict = await screen(recipient, screenOpts);
+    if (verdict === null || typeof verdict !== "object" || Array.isArray(verdict)) {
+      throw new Error("invalid screen response: expected an object");
+    }
+    const recommendation = verdict.recommendation;
+    if (!VALID_RECOMMENDATIONS.has(recommendation)) {
+      const detail =
+        recommendation === undefined
+          ? "missing recommendation"
+          : typeof recommendation === "string"
+            ? `unknown recommendation ${JSON.stringify(recommendation.slice(0, 64))}`
+            : `recommendation must be a string (received ${recommendation === null ? "null" : typeof recommendation})`;
+      throw new Error(`invalid screen response: ${detail}`);
+    }
     return { ok: !blockOn.includes(verdict.recommendation), verdict };
   } catch (err) {
     return {

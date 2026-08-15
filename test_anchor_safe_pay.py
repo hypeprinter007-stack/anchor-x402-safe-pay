@@ -74,6 +74,73 @@ state["sent"] = False
 r = guarded_send(RECIPIENT, send, on_error="allow", fetch=fetch_failing())
 ok("screen error + on_error='allow' → send runs", state["sent"] and r == "tx-hash")
 
+# unknown recommendation → error verdict, send does NOT run
+state["sent"] = False
+unknown_fetch = fetch_returning({"recommendation": "pending", "wallet": RECIPIENT})
+unknown_ok, unknown_v = screen_allows(RECIPIENT, fetch=unknown_fetch)
+unknown_decision_is_safe = (
+    unknown_ok is False
+    and unknown_v["recommendation"] == "error"
+    and "invalid screen response: unknown recommendation 'pending'" in unknown_v["notes"]
+)
+try:
+    guarded_send(RECIPIENT, send, fetch=unknown_fetch)
+    unknown_send_blocked = False
+except ScreenBlocked as e:
+    unknown_send_blocked = e.verdict["recommendation"] == "error" and not state["sent"]
+ok(
+    "unknown recommendation → error verdict, send does NOT run",
+    unknown_decision_is_safe and unknown_send_blocked,
+)
+
+# missing recommendation → error verdict, send does NOT run
+state["sent"] = False
+missing_fetch = fetch_returning({"risk_score": 42, "wallet": RECIPIENT})
+missing_ok, missing_v = screen_allows(RECIPIENT, fetch=missing_fetch)
+missing_decision_is_safe = (
+    missing_ok is False
+    and missing_v["recommendation"] == "error"
+    and "invalid screen response: missing recommendation" in missing_v["notes"]
+)
+try:
+    guarded_send(RECIPIENT, send, fetch=missing_fetch)
+    missing_send_blocked = False
+except ScreenBlocked as e:
+    missing_send_blocked = e.verdict["recommendation"] == "error" and not state["sent"]
+ok(
+    "missing recommendation → error verdict, send does NOT run",
+    missing_decision_is_safe and missing_send_blocked,
+)
+
+# non-dictionary verdict → error verdict, send does NOT run
+state["sent"] = False
+non_dict_fetch = fetch_returning(None)
+non_dict_ok, non_dict_v = screen_allows(RECIPIENT, fetch=non_dict_fetch)
+try:
+    guarded_send(RECIPIENT, send, fetch=non_dict_fetch)
+    non_dict_send_blocked = False
+except ScreenBlocked as e:
+    non_dict_send_blocked = e.verdict["recommendation"] == "error" and not state["sent"]
+ok(
+    "non-dictionary verdict → error verdict, send does NOT run",
+    non_dict_ok is False
+    and non_dict_v["recommendation"] == "error"
+    and non_dict_send_blocked,
+)
+
+# unknown recommendation + on_error='allow' → send runs
+state["sent"] = False
+r = guarded_send(
+    RECIPIENT,
+    send,
+    on_error="allow",
+    fetch=fetch_returning({"recommendation": "pending", "wallet": RECIPIENT}),
+)
+ok(
+    "unknown recommendation + on_error='allow' → send runs",
+    state["sent"] and r == "tx-hash",
+)
+
 # screen() surfaces the raw verdict
 v = screen(RECIPIENT, fetch=fetch_returning({"recommendation": "allow", "risk_score": 3, "wallet": RECIPIENT}))
 ok("screen() returns the raw verdict", v["recommendation"] == "allow" and v["risk_score"] == 3)

@@ -71,6 +71,54 @@ const run = async () => {
     assert.equal(r, "tx-hash");
   });
 
+  await ok("unknown recommendation → error verdict, send does NOT run", async () => {
+    sent = false;
+    const fetchImpl = fetchReturning({ recommendation: "pending", wallet: RECIPIENT });
+    const decision = await screenAllows(RECIPIENT, { fetchImpl });
+    assert.equal(decision.ok, false);
+    assert.equal(decision.verdict.recommendation, "error");
+    assert.match(decision.verdict.notes, /invalid screen response: unknown recommendation "pending"/);
+    await assert.rejects(
+      () => guardedSend(RECIPIENT, send, { fetchImpl }),
+      (e) => e instanceof ScreenBlockedError && e.verdict.recommendation === "error",
+    );
+    assert.equal(sent, false);
+  });
+
+  await ok("missing recommendation → error verdict, send does NOT run", async () => {
+    sent = false;
+    const fetchImpl = fetchReturning({ risk_score: 42, wallet: RECIPIENT });
+    const decision = await screenAllows(RECIPIENT, { fetchImpl });
+    assert.equal(decision.ok, false);
+    assert.equal(decision.verdict.recommendation, "error");
+    assert.match(decision.verdict.notes, /invalid screen response: missing recommendation/);
+    await assert.rejects(
+      () => guardedSend(RECIPIENT, send, { fetchImpl }),
+      (e) => e instanceof ScreenBlockedError && e.verdict.recommendation === "error",
+    );
+    assert.equal(sent, false);
+  });
+
+  await ok("non-object verdict → error verdict, send does NOT run", async () => {
+    sent = false;
+    const fetchImpl = fetchReturning(null);
+    const decision = await screenAllows(RECIPIENT, { fetchImpl });
+    assert.equal(decision.ok, false);
+    assert.equal(decision.verdict.recommendation, "error");
+    await assert.rejects(() => guardedSend(RECIPIENT, send, { fetchImpl }), ScreenBlockedError);
+    assert.equal(sent, false);
+  });
+
+  await ok("unknown recommendation + onError:'allow' → send runs (fail-open opt-in)", async () => {
+    sent = false;
+    const r = await guardedSend(RECIPIENT, send, {
+      onError: "allow",
+      fetchImpl: fetchReturning({ recommendation: "pending", wallet: RECIPIENT }),
+    });
+    assert.equal(sent, true);
+    assert.equal(r, "tx-hash");
+  });
+
   await ok("screen() surfaces the raw verdict for callers who branch themselves", async () => {
     const v = await screen(RECIPIENT, { fetchImpl: fetchReturning({ recommendation: "allow", risk_score: 3, wallet: RECIPIENT }) });
     assert.equal(v.recommendation, "allow");
