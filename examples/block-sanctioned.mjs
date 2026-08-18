@@ -22,7 +22,10 @@ if (process.env.PRIVATE_KEY) {
   const { base } = await import("viem/chains");
   const { wrapFetchWithPaymentFromConfig } = await import("@x402/fetch");
   const { ExactEvmScheme } = await import("@x402/evm");
-  const account = privateKeyToAccount(process.env.PRIVATE_KEY);
+  const pk = process.env.PRIVATE_KEY.startsWith("0x")
+    ? process.env.PRIVATE_KEY
+    : `0x${process.env.PRIVATE_KEY}`;
+  const account = privateKeyToAccount(pk);
   const wallet = createWalletClient({ account, chain: base, transport: http() });
   const signer = { address: account.address, signTypedData: (m) => wallet.signTypedData({ account, ...m }) };
   paidFetch = wrapFetchWithPaymentFromConfig(fetch, {
