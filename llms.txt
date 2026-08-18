@@ -1,0 +1,73 @@
+# anchor-x402-safe-pay
+
+> Screen a payment recipient before an AI agent sends funds. A tiny, wallet-agnostic guard that runs an [anchor-x402](https://anchor-x402.com) risk pre-flight (`allow` / `review` / `block`) on the counterparty at the pre-payment chokepoint and **fails closed**. npm + PyPI, MIT. It wraps the send your agent already makes — no new service to call, no account, no API key. One screen call is `$0.02` USDC on Base, settled via x402 by your own paid-fetch.
+
+Use this when an autonomous agent sends USDC/x402 payments and you want a sanctions + address-reputation check (drainer / phishing / mixer) in the send path, so a payment to a flagged address fails closed instead of draining the wallet.
+
+## Install
+
+- npm: `npm install anchor-x402-safe-pay`
+- PyPI: `pip install anchor-x402-safe-pay`
+
+## API — JavaScript / TypeScript
+
+- `screen(recipient, { fetchImpl, endpoint?, timeoutMs? }) -> Promise<verdict>` — raw verdict `{ recommendation: "allow"|"review"|"block", risk_score, signals, sanctioned_lists, ... }`.
+- `screenAllows(recipient, { fetchImpl, blockOn?, onError?, ... }) -> Promise<{ ok, verdict }>` — no-throw decision; folds `blockOn`/`onError`. Use this to register on an existing pre-pay hook.
+- `guardedSend(recipient, sendThunk, { fetchImpl, blockOn?, onError?, ... }) -> Promise<any>` — runs `sendThunk` only if allowed; otherwise throws `ScreenBlockedError` (carrying the verdict) and the send never runs.
+- `ScreenBlockedError` — thrown on a blocked verdict; `.verdict` holds the detail.
+
+## API — Python
+
+- `screen(recipient, *, fetch, endpoint=?, timeout=?) -> dict`
+- `screen_allows(recipient, *, fetch, block_on=?, on_error=?) -> (ok, verdict)`
+- `guarded_send(recipient, send, *, fetch, block_on=?, on_error=?) -> Any` — raises `ScreenBlocked`.
+
+## Minimal use
+
+```js
+import { guardedSend } from "anchor-x402-safe-pay";
+await guardedSend(recipient, () => wallet.sendUsdc(recipient, amount), { fetchImpl: paidFetch });
+```
+```python
+from anchor_safe_pay import guarded_send
+guarded_send(recipient, lambda: wallet.send_usdc(recipient, amount), fetch=paid_post)
+```
+
+## Verdict → action
+
+- `allow` → send runs.
+- `review` → held by default (elevated risk; wire your own human-in-the-loop to release).
+- `block` → held (sanctioned / drainer / phishing).
+- unknown / malformed / screen call failed → routed through `onError`; **blocks by default**.
+
+Defaults: `blockOn: ["block","review"]`, `onError: "block"`. Set `blockOn: ["block"]` to send on `review`; set `onError: "allow"` if anchor downtime should never block your payments (choose deliberately).
+
+## Preferred integration: register on the client's existing pre-pay hook (one line, no rewrite)
+
+Most x402 clients already fire a hook with the recipient (`payTo`) before signing — you only need to return a decision. Use a `paidFetch` OTHER than the client you're guarding so screening never recurses.
+
+- Official `@x402` client (`onBeforePaymentCreation`):
+  ```js
+  x402Client.onBeforePaymentCreation(async (req) => {
+    const { ok, verdict } = await screenAllows(req.payTo, { fetchImpl: paidFetch });
+    return ok ? undefined : { abort: true, reason: verdict.recommendation };
+  });
+  ```
+- elizaOS plugin-wallet (`onBeforePayment`, return `false` to block):
+  ```js
+  const onBeforePayment = async (req) => (await screenAllows(req.payTo, { fetchImpl: paidFetch })).ok;
+  ```
+- faremeter (`payerChooser`, throw to abort), qntx/r402 (`before_payment_creation`), and the Python client (`on_before_payment_creation`) take the same shape — see `examples/`.
+
+## Notes for integrators
+
+- `fetchImpl` (JS) / `fetch` (Py) is required for real use — it settles the `$0.02` screen. Without it you get a 402.
+- Screening degrades to a `partial` verdict rather than erroring if the reputation layer is briefly unavailable; `onError` governs total failures.
+- Solana recipients: the sanctions floor applies; address-reputation is EVM-oriented, so a Solana verdict may be `partial`.
+
+## Links
+
+- Repo: https://github.com/hypeprinter007-stack/anchor-x402-safe-pay
+- Screen endpoint: https://api.anchor-x402.com/v1/screen (`GET ?wallet=` or `POST {wallet}`)
+- Runnable examples: https://github.com/hypeprinter007-stack/anchor-x402-safe-pay/tree/main/examples
+- anchor-x402: https://anchor-x402.com

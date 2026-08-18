@@ -14,6 +14,8 @@ Autonomous agents move USDC without a human watching the recipient. `safe-pay` p
 npm install anchor-x402-safe-pay      # or: pip install anchor-x402-safe-pay
 ```
 
+Wiring it into an agent (or letting a coding assistant do it)? [`llms.txt`](./llms.txt) is a machine-readable integration index — API, verdict semantics, and the one-line hook snippet per x402 client.
+
 ## Use — JavaScript / TypeScript
 
 ```js
@@ -29,6 +31,8 @@ await guardedSend(
 ```
 
 If the recipient is flagged, `guardedSend` throws `ScreenBlockedError` (carrying the full verdict) and your send never runs.
+
+**See it fail closed:** [`examples/block-sanctioned.mjs`](./examples/block-sanctioned.mjs) refuses to pay a real OFAC-SDN Tornado Cash address — run it with no wallet needed: `node examples/block-sanctioned.mjs`.
 
 ## Use — Python
 
