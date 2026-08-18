@@ -32,7 +32,11 @@ await guardedSend(
 
 If the recipient is flagged, `guardedSend` throws `ScreenBlockedError` (carrying the full verdict) and your send never runs.
 
-**See it fail closed:** [`examples/block-sanctioned.mjs`](./examples/block-sanctioned.mjs) refuses to pay a real OFAC-SDN Tornado Cash address — run it with no wallet needed: `node examples/block-sanctioned.mjs`.
+**See it fail closed** — a real `$0.02` screen refusing a live OFAC-SDN Tornado Cash address:
+
+![safe-pay refusing to pay a sanctioned recipient](./examples/block-sanctioned.gif)
+
+Run it yourself: [`examples/block-sanctioned.mjs`](./examples/block-sanctioned.mjs) — `node examples/block-sanctioned.mjs` (no wallet needed for the free simulation; set `PRIVATE_KEY` for the live check above).
 
 ## Use — Python
 
