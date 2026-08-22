@@ -14,6 +14,7 @@ Use this when an autonomous agent sends USDC/x402 payments and you want a sancti
 - `screen(recipient, { fetchImpl, endpoint?, timeoutMs? }) -> Promise<verdict>` — raw verdict `{ recommendation: "allow"|"review"|"block", risk_score, signals, sanctioned_lists, ... }`.
 - `screenAllows(recipient, { fetchImpl, blockOn?, onError?, ... }) -> Promise<{ ok, verdict }>` — no-throw decision; folds `blockOn`/`onError`. Use this to register on an existing pre-pay hook.
 - `guardedSend(recipient, sendThunk, { fetchImpl, blockOn?, onError?, ... }) -> Promise<any>` — runs `sendThunk` only if allowed; otherwise throws `ScreenBlockedError` (carrying the verdict) and the send never runs.
+- `composeCapWithScreen({ maxAmount, ...screenOpts }) -> (ctx:{payTo, amount}) => Promise<{abort, reason?, verdict}>` — pre-payment-hook helper: composes the recipient verdict with a stateless per-send amount cap, evaluated against the **real 402 challenge amount** (closes the plan-time TOCTOU). `maxAmount` is inclusive (atomic units); `reason` ∈ `flagged_recipient` | `exceeds_cap`. Fail-closed. Cumulative/rate budgets are out of scope (they need state — wallet/agent layer).
 - `ScreenBlockedError` — thrown on a blocked verdict; `.verdict` holds the detail.
 
 ## API — Python
@@ -21,6 +22,7 @@ Use this when an autonomous agent sends USDC/x402 payments and you want a sancti
 - `screen(recipient, *, fetch, endpoint=?, timeout=?) -> dict`
 - `screen_allows(recipient, *, fetch, block_on=?, on_error=?) -> (ok, verdict)`
 - `guarded_send(recipient, send, *, fetch, block_on=?, on_error=?) -> Any` — raises `ScreenBlocked`.
+- `compose_cap_with_screen(*, max_amount, block_on=?, on_error=?, **screen_kwargs) -> hook(pay_to, amount) -> dict` — same per-send-cap-at-the-hook helper; dict is `{abort, reason?, verdict}`.
 
 ## Minimal use
 

@@ -111,3 +111,45 @@ def guarded_send(
     if not ok:
         raise ScreenBlocked(verdict)
     return send()
+
+
+def compose_cap_with_screen(
+    *,
+    max_amount: int | str,
+    block_on: tuple[str, ...] = ("block", "review"),
+    on_error: str = "block",
+    **screen_kwargs: Any,
+) -> Callable[..., dict]:
+    """Compose recipient screening with a stateless per-send amount cap, for use
+    at a client's pre-payment hook — the seat where the real 402 challenge
+    `amount` and `pay_to` are both known at send time. Closes a TOCTOU a
+    plan-time cap can't: with x402 the amount is payee-set in the 402, so a cap
+    checked when the agent *plans* the call can be bypassed by a challenge-time
+    bump — the hook sees the amount that will actually be paid.
+
+    Stateless by design (no budget/rate engine — cumulative windows belong in the
+    wallet/agent layer). Fail-closed: a flagged recipient, an over-cap amount, or
+    a screen failure all abort; the recipient verdict wins. `max_amount` is the
+    maximum *allowed* (atomic units), so paying exactly the cap is permitted.
+
+    Returns a hook callable `hook(pay_to, amount) -> dict` where the dict is
+    `{"abort": False, "verdict": ...}` to pay, or
+    `{"abort": True, "reason": "flagged_recipient"|"exceeds_cap", ...}` to refuse.
+    """
+    max_ = int(max_amount)
+
+    def hook(pay_to: str, amount: int | str) -> dict:
+        ok, verdict = screen_allows(pay_to, block_on=block_on, on_error=on_error, **screen_kwargs)
+        if not ok:
+            return {"abort": True, "reason": "flagged_recipient", "verdict": verdict}
+        if int(amount) > max_:
+            return {
+                "abort": True,
+                "reason": "exceeds_cap",
+                "amount": str(amount),
+                "cap": str(max_),
+                "verdict": verdict,
+            }
+        return {"abort": False, "verdict": verdict}
+
+    return hook

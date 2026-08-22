@@ -107,3 +107,40 @@ export async function guardedSend(recipient, send, opts = {}) {
   if (!ok) throw new ScreenBlockedError(verdict);
   return await send();
 }
+
+/**
+ * Compose recipient screening with a stateless per-send amount cap, for use at
+ * a client's pre-payment hook — the seat where the real 402 challenge `amount`
+ * and `payTo` are both known at send time (matches the `beforePayment` context
+ * in coinbase/agentkit#1454). This closes a TOCTOU a plan-time cap can't: with
+ * x402 the amount is payee-set in the 402, so a cap checked when the agent
+ * *plans* the call can be bypassed by a challenge-time bump — the hook sees the
+ * amount that will actually be paid.
+ *
+ * Stateless by design: no budget/rate engine (cumulative windows belong in the
+ * wallet/agent layer). Fail-closed — a flagged recipient, an over-cap amount,
+ * or a screen failure all abort; the recipient verdict wins (a flagged payee
+ * aborts even under cap). `maxAmount` is the maximum *allowed* (atomic units),
+ * so paying exactly the cap is permitted; strictly-greater aborts.
+ *
+ * @param {object} opts
+ *   maxAmount {string|bigint|number}  cap in the asset's atomic units (required).
+ *   plus any `screenAllows` opts (blockOn, onError, fetchImpl, endpoint, timeoutMs).
+ * @returns {(ctx: {payTo: string, amount: string|bigint|number}) => Promise<{abort: boolean, reason?: "flagged_recipient"|"exceeds_cap", verdict: object, amount?: string, cap?: string}>}
+ *   A hook callback: `{abort:false}` ⇒ pay; `{abort:true, reason}` ⇒ refuse.
+ */
+export function composeCapWithScreen(opts = {}) {
+  const { maxAmount, ...screenOpts } = opts;
+  if (maxAmount === undefined || maxAmount === null) {
+    throw new Error("safe-pay: composeCapWithScreen requires opts.maxAmount");
+  }
+  const max = BigInt(maxAmount);
+  return async ({ payTo, amount }) => {
+    const { ok, verdict } = await screenAllows(payTo, screenOpts);
+    if (!ok) return { abort: true, reason: "flagged_recipient", verdict };
+    if (BigInt(amount) > max) {
+      return { abort: true, reason: "exceeds_cap", amount: String(amount), cap: String(max), verdict };
+    }
+    return { abort: false, verdict };
+  };
+}

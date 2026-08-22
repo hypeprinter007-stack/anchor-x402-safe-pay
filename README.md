@@ -70,6 +70,19 @@ const onBeforePayment = async (req) => (await screenAllows(req.payTo, { fetchImp
 
 **faremeter** (`payerChooser` → throw to abort), **qntx/r402** (`before_payment_creation`), and the **Python** client (`on_before_payment_creation`) take the same shape — see [`examples/`](./examples). Use `paidFetch` *other* than the client you're guarding, so screening a payment never recurses.
 
+## Add a per-send amount cap (at the hook)
+
+Screening answers *who* the recipient is; it doesn't bound *how much*. With x402 the amount is payee-set in the 402 challenge, so a cap checked when the agent *plans* a call can be bypassed by a challenge-time bump — a TOCTOU. `composeCapWithScreen` folds the recipient verdict and a stateless per-send cap into one fail-closed decision, evaluated at the pre-payment hook against the **real challenge amount** (the seat that carries both `payTo` and `amount` — e.g. agentkit's `beforePayment`):
+
+```js
+import { composeCapWithScreen } from "anchor-x402-safe-pay";
+
+const beforePayment = composeCapWithScreen({ maxAmount: 1_000_000n, fetchImpl: paidFetch }); // 1 USDC, atomic units
+const { abort, reason } = await beforePayment({ payTo, amount });  // reason: "flagged_recipient" | "exceeds_cap"
+```
+
+Stateless by design — a flagged recipient, an over-cap amount, or a screen failure all fail closed; `maxAmount` is inclusive (paying exactly the cap is allowed). Cumulative / rate budgets are deliberately out of scope: those need state and belong in the wallet/agent layer. Python: `compose_cap_with_screen(max_amount=…, fetch=…)` returns `hook(pay_to, amount) -> dict`.
+
 ## Verdict → action
 
 `/v1/screen` returns a `recommendation` you branch on:

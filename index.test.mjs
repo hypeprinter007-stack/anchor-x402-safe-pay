@@ -1,6 +1,6 @@
 // Offline tests: node index.test.mjs
 import assert from "node:assert";
-import { guardedSend, screen, screenAllows, ScreenBlockedError } from "./index.js";
+import { guardedSend, screen, screenAllows, ScreenBlockedError, composeCapWithScreen } from "./index.js";
 
 let fails = 0;
 const ok = (name, fn) =>
@@ -145,6 +145,60 @@ const run = async () => {
     const r = await screenAllows(RECIPIENT, { fetchImpl: fetchFailing() });
     assert.equal(r.ok, false);
     assert.equal(r.verdict.recommendation, "error");
+  });
+
+  // composeCapWithScreen — per-send amount cap composed with the recipient
+  // verdict, evaluated at the pre-payment hook against the REAL challenge amount
+  // (closes the plan-time TOCTOU). Contributed test path by @Sergio87Felix (#2).
+  const clean = fetchReturning({ recommendation: "allow", risk_score: 0, wallet: RECIPIENT });
+
+  await ok("cap: challenge-time amount bump over cap → abort exceeds_cap (fail-closed)", async () => {
+    const gate = composeCapWithScreen({ maxAmount: "1000000", fetchImpl: clean }); // $0.01 cap
+    const r = await gate({ payTo: RECIPIENT, amount: "10000000" }); // $0.10 demanded by the 402
+    assert.equal(r.abort, true);
+    assert.equal(r.reason, "exceeds_cap");
+    assert.equal(r.amount, "10000000");
+    assert.equal(r.cap, "1000000");
+  });
+
+  await ok("cap: amount exactly at cap → allow (maxAmount is inclusive; strictly-greater aborts)", async () => {
+    const gate = composeCapWithScreen({ maxAmount: "1000000", fetchImpl: clean });
+    const r = await gate({ payTo: RECIPIENT, amount: "1000000" });
+    assert.equal(r.abort, false);
+  });
+
+  await ok("cap: amount under cap → allow", async () => {
+    const gate = composeCapWithScreen({ maxAmount: "1000000", fetchImpl: clean });
+    const r = await gate({ payTo: RECIPIENT, amount: "500000" });
+    assert.equal(r.abort, false);
+  });
+
+  await ok("cap: flagged recipient under cap → abort flagged_recipient (verdict wins)", async () => {
+    const gate = composeCapWithScreen({
+      maxAmount: "1000000",
+      fetchImpl: fetchReturning({ recommendation: "block", risk_score: 100, wallet: RECIPIENT }),
+    });
+    const r = await gate({ payTo: RECIPIENT, amount: "100" });
+    assert.equal(r.abort, true);
+    assert.equal(r.reason, "flagged_recipient");
+  });
+
+  await ok("cap: screen failure under cap → abort (onError default fail-closed)", async () => {
+    const gate = composeCapWithScreen({ maxAmount: "1000000", fetchImpl: fetchFailing() });
+    const r = await gate({ payTo: RECIPIENT, amount: "100" });
+    assert.equal(r.abort, true);
+    assert.equal(r.reason, "flagged_recipient");
+  });
+
+  await ok("cap: onError:'allow' + over-cap → still aborts on the cap (cap is independent of screen)", async () => {
+    const gate = composeCapWithScreen({ maxAmount: "1000000", onError: "allow", fetchImpl: fetchFailing() });
+    const r = await gate({ payTo: RECIPIENT, amount: "10000000" });
+    assert.equal(r.abort, true);
+    assert.equal(r.reason, "exceeds_cap");
+  });
+
+  await ok("cap: missing maxAmount → throws (misconfig, not a silent no-cap)", async () => {
+    assert.throws(() => composeCapWithScreen({ fetchImpl: clean }), /requires opts\.maxAmount/);
   });
 
   console.log(fails ? `\n${fails} FAILED` : "\nall safe-pay (js) checks OK");

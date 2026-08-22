@@ -1,7 +1,7 @@
 """Offline tests: python3 test_anchor_safe_pay.py"""
 import sys
 
-from anchor_safe_pay import ScreenBlocked, guarded_send, screen, screen_allows
+from anchor_safe_pay import ScreenBlocked, compose_cap_with_screen, guarded_send, screen, screen_allows
 
 RECIPIENT = "0x1111111111111111111111111111111111111111"
 _fails = 0
@@ -154,6 +154,43 @@ err_ok, err_v = screen_allows(RECIPIENT, fetch=fetch_failing())
 ok("screen_allows: screen error default -> (False, error verdict)", err_ok is False and err_v["recommendation"] == "error")
 err2_ok, _ = screen_allows(RECIPIENT, on_error="allow", fetch=fetch_failing())
 ok("screen_allows: screen error + on_error='allow' -> (True, ...)", err2_ok is True)
+
+# compose_cap_with_screen: per-send amount cap composed with the verdict at the
+# pre-payment hook, against the REAL challenge amount (closes the plan-time TOCTOU).
+_clean = fetch_returning({"recommendation": "allow", "risk_score": 0, "wallet": RECIPIENT})
+
+gate = compose_cap_with_screen(max_amount="1000000", fetch=_clean)  # $0.01 cap
+bump = gate(RECIPIENT, "10000000")  # $0.10 demanded by the 402
+ok("cap: challenge-time amount bump over cap -> abort exceeds_cap",
+   bump["abort"] is True and bump["reason"] == "exceeds_cap" and bump["amount"] == "10000000" and bump["cap"] == "1000000")
+
+at_cap = gate(RECIPIENT, "1000000")
+ok("cap: amount exactly at cap -> allow (inclusive max)", at_cap["abort"] is False)
+
+under = gate(RECIPIENT, "500000")
+ok("cap: amount under cap -> allow", under["abort"] is False)
+
+flagged_gate = compose_cap_with_screen(
+    max_amount="1000000", fetch=fetch_returning({"recommendation": "block", "risk_score": 100, "wallet": RECIPIENT}))
+flagged = flagged_gate(RECIPIENT, "100")
+ok("cap: flagged recipient under cap -> abort flagged_recipient (verdict wins)",
+   flagged["abort"] is True and flagged["reason"] == "flagged_recipient")
+
+err_gate = compose_cap_with_screen(max_amount="1000000", fetch=fetch_failing())
+err_cap = err_gate(RECIPIENT, "100")
+ok("cap: screen failure under cap -> abort (on_error default fail-closed)",
+   err_cap["abort"] is True and err_cap["reason"] == "flagged_recipient")
+
+allow_err_over = compose_cap_with_screen(max_amount="1000000", on_error="allow", fetch=fetch_failing())
+over = allow_err_over(RECIPIENT, "10000000")
+ok("cap: on_error='allow' + over-cap -> still aborts on the cap", over["abort"] is True and over["reason"] == "exceeds_cap")
+
+try:
+    compose_cap_with_screen(fetch=_clean)  # type: ignore[call-arg]
+    _missing_raised = False
+except TypeError:
+    _missing_raised = True
+ok("cap: missing max_amount -> raises (misconfig, not silent no-cap)", _missing_raised)
 
 print(f"\n{_fails} FAILED" if _fails else "\nall safe-pay (python) checks OK")
 sys.exit(1 if _fails else 0)
