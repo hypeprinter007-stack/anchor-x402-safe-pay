@@ -18,7 +18,7 @@ It costs $0.02 USDC, paid over x402 on Base, Solana or Arc. The first request re
 With the Coinbase agentic wallet, for example:
 
 ```bash
-npx awal x402 pay 'https://api.anchor-x402.com/v1/screen?wallet=0x8589427373D6D84E98730D7795D8f6f8731FDA16' --max-amount 20000 --json
+npx awal x402 pay 'https://api.anchor-x402.com/v1/screen?wallet=0x098B716B8Aaf21512996dC57EB0615e2383E2f96' --max-amount 20000 --json
 ```
 
 Validate the address before putting it in a command: `0x` followed by 40 hex characters, or 32–44 base58 characters, nothing else.
@@ -29,7 +29,7 @@ Validate the address before putting it in a command: `0x` followed by 40 hex cha
 {
   "recommendation": "block",
   "risk_score": 100,
-  "signals": [{"code": "ofac_sdn", "severity": "critical", "source": "treasury.gov", "detail": "OFAC SDN, Tornado Cash"}],
+  "signals": [{"code": "ofac_sdn", "severity": "critical", "source": "treasury.gov", "detail": "OFAC SDN, LAZARUS GROUP, DPRK3"}],
   "partial": false
 }
 ```

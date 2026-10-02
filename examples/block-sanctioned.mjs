@@ -1,16 +1,16 @@
 // Felt-risk demo: safe-pay refuses to pay a sanctioned recipient.
 //
-// An AI agent is about to send USDC to a Tornado Cash address (OFAC SDN).
+// An AI agent is about to send USDC to a Lazarus Group address (OFAC SDN).
 // guardedSend screens the recipient first and FAILS CLOSED — the send thunk
 // never runs, the funds stay put.
 //
 //   node examples/block-sanctioned.mjs                 # free, simulated verdict
 //   PRIVATE_KEY=0x... node examples/block-sanctioned.mjs   # live $0.02 real screen
 //
-// The address below is a real OFAC-SDN Tornado Cash router (sanctioned Aug 2022).
+// The address below is on Treasury's SDN list as LAZARUS GROUP (program DPRK3).
 import { guardedSend, ScreenBlockedError } from "anchor-x402-safe-pay";
 
-const SANCTIONED = "0x8589427373D6D84E98730D7795D8f6f8731FDA16";
+const SANCTIONED = "0x098B716B8Aaf21512996dC57EB0615e2383E2f96";
 
 // Your x402-capable fetch. With a funded Base key this hits the live $0.02
 // /v1/screen; without one, we return the *documented* block verdict for this
@@ -38,10 +38,10 @@ if (process.env.PRIVATE_KEY) {
       JSON.stringify({
         wallet: SANCTIONED,
         recommendation: "block",
-        risk_score: 90,
+        risk_score: 100,
         sanctions_match: true,
-        sanctioned_lists: ["OFAC SDN", "Tornado Cash"],
-        signals: [{ type: "sanctions", severity: "critical", detail: "On a sanctions list" }],
+        sanctioned_lists: ["OFAC SDN", "LAZARUS GROUP", "DPRK3"],
+        signals: [{ code: "ofac_sdn", severity: "critical", source: "treasury.gov", detail: "OFAC SDN, LAZARUS GROUP, DPRK3" }],
       }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
