@@ -16,6 +16,12 @@ npm install anchor-x402-safe-pay      # or: pip install anchor-x402-safe-pay
 
 Wiring it into an agent (or letting a coding assistant do it)? [`llms.txt`](./llms.txt) is a machine-readable integration index — API, verdict semantics, and the one-line hook snippet per x402 client.
 
+Agent with a wallet but no code to change? Install the [`screen-before-pay`](./skills/screen-before-pay/SKILL.md) skill and it screens an address before paying it:
+
+```bash
+npx skills add hypeprinter007-stack/anchor-x402-safe-pay
+```
+
 ## Use — JavaScript / TypeScript
 
 ```js

@@ -71,5 +71,6 @@ Most x402 clients already fire a hook with the recipient (`payTo`) before signin
 
 - Repo: https://github.com/hypeprinter007-stack/anchor-x402-safe-pay
 - Screen endpoint: https://api.anchor-x402.com/v1/screen (`GET ?wallet=` or `POST {wallet}`)
+- Agent skill (no code): https://github.com/hypeprinter007-stack/anchor-x402-safe-pay/blob/main/skills/screen-before-pay/SKILL.md — `npx skills add hypeprinter007-stack/anchor-x402-safe-pay`
 - Runnable examples: https://github.com/hypeprinter007-stack/anchor-x402-safe-pay/tree/main/examples
 - anchor-x402: https://anchor-x402.com
